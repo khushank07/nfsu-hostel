@@ -1,0 +1,5 @@
+{
+  "name": "NFSU Hostel Leave Management System",
+  "description": "A production-ready leave management system for NFSU students and wardens with real-time notifications and PDF pass generation.",
+  "requestFramePermissions": []
+}

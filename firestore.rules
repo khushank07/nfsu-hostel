@@ -1,0 +1,161 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: students
+    // Document ID: Firebase Auth UID
+    // Fields:
+    //   - student_id: string (required) - The NFSU ID (e.g. NFSU101_1)
+    //   - name: string (required)
+    //   - room_number: string (required)
+    //   - block: string (required)
+    //   - phone_number: string (required)
+    //   - role: string (required, enum: ['student'])
+    //
+    // Collection: admins
+    // Document ID: Firebase Auth UID
+    // Fields:
+    //   - username: string (required)
+    //   - name: string (required)
+    //   - role: string (required, enum: ['admin'])
+    //
+    // Collection: leave_requests
+    // Document ID: Auto-generated
+    // Fields:
+    //   - student_id: string (required) - The Firebase Auth UID
+    //   - student_name: string (required)
+    //   - room_number: string (required)
+    //   - block: string (required)
+    //   - leave_type: string (required, enum: ['Late Night Leave', 'Long Leave'])
+    //   - reason: string (required)
+    //   - from_datetime: string (required, ISO 8601)
+    //   - to_datetime: string (required, ISO 8601)
+    //   - contact_number: string (required)
+    //   - parent_contact_number: string (required)
+    //   - status: string (required, enum: ['Pending', 'Approved', 'Rejected'])
+    //   - approved_by: string (optional)
+    //   - approved_at: string (optional, ISO 8601)
+    //   - created_at: string (required, ISO 8601)
+    //
+    // Collection: notifications
+    // Document ID: Auto-generated
+    // Fields:
+    //   - user_id: string (required) - Target UID or 'admin_broadcast'
+    //   - message: string (required)
+    //   - type: string (required)
+    //   - read: boolean (required)
+    //   - created_at: string (required, ISO 8601)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "khushankys@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidStudent(data) {
+      return hasRequiredFields(['student_id', 'name', 'room_number', 'block', 'phone_number', 'role']) &&
+             data.student_id is string && data.student_id.size() > 0 &&
+             data.name is string && data.name.size() > 0 &&
+             data.role == 'student';
+    }
+
+    function isValidAdmin(data) {
+      return hasRequiredFields(['username', 'name', 'role']) &&
+             data.username is string && data.username.size() > 0 &&
+             data.name is string && data.name.size() > 0 &&
+             data.role == 'admin';
+    }
+
+    function isValidLeaveRequest(data) {
+      return hasRequiredFields(['student_id', 'student_name', 'room_number', 'block', 'leave_type', 'reason', 'from_datetime', 'to_datetime', 'contact_number', 'parent_contact_number', 'status', 'created_at']) &&
+             data.student_id is string &&
+             data.leave_type in ['Late Night Leave', 'Long Leave'] &&
+             data.status in ['Pending', 'Approved', 'Rejected'] &&
+             isValidDateString(data.from_datetime) &&
+             isValidDateString(data.to_datetime) &&
+             isValidDateString(data.created_at);
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['user_id', 'message', 'type', 'read', 'created_at']) &&
+             data.user_id is string &&
+             data.message is string &&
+             data.read is bool &&
+             isValidDateString(data.created_at);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /students/{studentId} {
+      allow read: if isAuthenticated() && (isOwner(studentId) || isAdmin());
+      allow create: if isAdmin() && isValidStudent(request.resource.data);
+      allow update: if isAdmin() && isValidStudent(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isAuthenticated() && (isOwner(adminId) || isAdmin());
+      allow create: if isAdmin() && isValidAdmin(request.resource.data);
+      allow update: if isAdmin() && isValidAdmin(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /leave_requests/{requestId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.student_id || isAdmin());
+      allow create: if isAuthenticated() && 
+                      request.resource.data.student_id == request.auth.uid && 
+                      isValidLeaveRequest(request.resource.data) &&
+                      request.resource.data.status == 'Pending';
+      allow update: if isAuthenticated() && (
+                      isAdmin() && isValidLeaveRequest(request.resource.data) ||
+                      (request.auth.uid == resource.data.student_id && 
+                       request.resource.data.status == resource.data.status && 
+                       isValidLeaveRequest(request.resource.data))
+                    );
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.user_id || resource.data.user_id == 'admin_broadcast' || isAdmin());
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data);
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin()) && isValidNotification(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

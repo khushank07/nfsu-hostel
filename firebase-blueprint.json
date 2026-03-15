@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "student": {
+      "title": "Student",
+      "description": "Predefined student record.",
+      "type": "object",
+      "properties": {
+        "student_id": { "type": "string", "description": "Unique Student ID" },
+        "name": { "type": "string" },
+        "room_number": { "type": "string" },
+        "block": { "type": "string" },
+        "phone_number": { "type": "string" },
+        "password": { "type": "string", "description": "Plain text for this simple system as requested" },
+        "role": { "type": "string", "enum": ["student"] }
+      },
+      "required": ["student_id", "name", "password", "role"]
+    },
+    "admin": {
+      "title": "Admin",
+      "description": "Hostel staff or warden.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin"] }
+      },
+      "required": ["username", "password", "role"]
+    },
+    "leave_request": {
+      "title": "Leave Request",
+      "description": "A request for leave submitted by a student.",
+      "type": "object",
+      "properties": {
+        "request_id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "student_name": { "type": "string" },
+        "room_number": { "type": "string" },
+        "block": { "type": "string" },
+        "leave_type": { "type": "string", "enum": ["Late Night Leave", "Long Leave"] },
+        "reason": { "type": "string" },
+        "from_datetime": { "type": "string", "format": "date-time" },
+        "to_datetime": { "type": "string", "format": "date-time" },
+        "contact_number": { "type": "string" },
+        "parent_contact_number": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "approved_by": { "type": "string" },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["student_id", "leave_type", "reason", "from_datetime", "to_datetime", "status"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "System notification for users.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "description": "Target user ID (student_id or admin username)" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "message", "read", "created_at"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "student",
+      "description": "Collection of predefined students."
+    },
+    "/admins/{adminId}": {
+      "schema": "admin",
+      "description": "Collection of hostel admins."
+    },
+    "/leave_requests/{requestId}": {
+      "schema": "leave_request",
+      "description": "Collection of leave applications."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "notification",
+      "description": "Collection of user notifications."
+    }
+  }
+}
